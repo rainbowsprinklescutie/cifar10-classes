@@ -70,7 +70,7 @@ if __name__ == '__main__':
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
     print('Starting Training...')
-    for epoch in range(2):
+    for epoch in range(5):
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             inputs, labels = data
@@ -86,3 +86,26 @@ if __name__ == '__main__':
                 running_loss = 0.0
 
     print('Finished Training')
+
+    PATH = './cifar_net.pth'
+    torch.save(net.state_dict(), PATH)
+    print(f'Final model saved to {PATH}')
+
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in testloader:
+            images, labels = data
+            outputs = net(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    
+    print(f'Accuracy of the network on the 10000 test images: {100 * correct / total}%')
+
+#     How to Improve Accuracy
+# 1. Increase Training Epochs
+# 2. Add Data Augmentation (Crucial)
+# 3. Use a Deeper Architecture (ResNet)
+# 4. Adjust the Learning Rate
+
