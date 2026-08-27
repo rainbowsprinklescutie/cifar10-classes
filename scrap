@@ -1,0 +1,78 @@
+import requests
+import time
+import pandas as pd
+import argparse
+
+def get_user_details(token, username):
+    """Fetches deep profile details for a specific user."""
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    url = f"https://api.github.com/users/{username}"
+    
+    try:
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            d = resp.json()
+            full_name = d.get('name') or ""
+            name_parts = full_name.split(' ', 1)
+            
+            return {
+                "Username": d.get('login'),
+                "First Name": name_parts[0] if name_parts else "",
+                "Last Name": name_parts[1] if len(name_parts) > 1 else "",
+                "Email": d.get('email', "Private"),
+                "Location": d.get('location', "Not Specified"),
+                "Title": d.get('bio', ""), # GitHub 'Bio' usually contains job titles
+                "Public Repos": d.get('public_repos'),
+                "Age": "", # Not available via GitHub API
+                "Gender": "" # Not available via GitHub API
+            }
+    except Exception as e:
+        print(f"Error fetching details for {username}: {e}")
+    return None
+
+def fetch_monthly_users(token, year, month, limit=10):
+    """Searches for human users created in a specific month."""
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    
+    # type:user excludes organizations
+    query = f"created:{year}-{month:02d}-01..{year}-{month:02d}-28 type:user"
+    url = "https://api.github.com/search/users"
+    
+    params = {"q": query, "per_page": limit}
+    response = requests.get(url, headers=headers, params=params)
+    
+    detailed_users = []
+    if response.status_code == 200:
+        search_results = response.json().get('items', [])
+        for user in search_results:
+            details = get_user_details(token, user['login'])
+            if details:
+                detailed_users.append(details)
+            time.sleep(0.5) # Prevent hitting secondary rate limits
+    return detailed_users
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token", required=True)
+    args = parser.parse_args()
+
+    filename = "github_detailed_users_2017_2023.xlsx"
+    years = range(2017, 2024)
+    months = range(1, 13)
+
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        for year in years:
+            for month in months:
+                sheet_name = f"{year}-{month:02d}"
+                print(f"Processing {sheet_name}...")
+                
+                data = fetch_monthly_users(args.token, year, month, limit=10)
+                
+                if data:
+                    df = pd.DataFrame(data)
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+                # Search API has a lower limit than User API
+                time.sleep(2) 
+
+    print(f"\nDone! File saved as {filename}")
